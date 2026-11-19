@@ -2,26 +2,30 @@
 <html lang="pl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Galeria</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Galeria zdjęć</title>
 
 <style>
 
 *{
+box-sizing:border-box;
 margin:0;
 padding:0;
-box-sizing:border-box;
 }
 
 body{
+font-family:Arial,sans-serif;
 background:#111;
 color:#fff;
-font-family:Arial,sans-serif;
 }
 
 header{
 padding:20px;
 text-align:center;
+background:#1a1a1a;
+position:sticky;
+top:0;
+z-index:100;
 }
 
 h1{
@@ -32,36 +36,63 @@ margin-bottom:15px;
 width:100%;
 max-width:500px;
 padding:12px;
-font-size:16px;
 border:none;
 border-radius:8px;
+font-size:16px;
 }
 
-.gallery{
-padding:20px;
+.folderSection{
+padding:25px;
+}
+
+.folderTitle{
+font-size:26px;
+margin-bottom:15px;
+padding-bottom:10px;
+border-bottom:2px solid #333;
+}
+
+.folderCount{
+font-size:15px;
+color:#aaa;
+margin-left:10px;
+}
+
+.folderGrid{
 display:grid;
-grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
+grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
 gap:15px;
 }
 
-.gallery img{
-width:100%;
-height:250px;
-object-fit:cover;
+.photoCard{
+background:#1c1c1c;
 border-radius:10px;
-cursor:pointer;
-transition:.3s;
-background:#222;
+overflow:hidden;
 }
 
-.gallery img:hover{
-transform:scale(1.03);
+.photoCard img{
+width:100%;
+height:220px;
+object-fit:cover;
+cursor:pointer;
+transition:.3s;
+display:block;
+}
+
+.photoCard img:hover{
+transform:scale(1.04);
+}
+
+.fileName{
+padding:10px;
+font-size:13px;
+word-break:break-word;
 }
 
 .loading{
+padding:50px;
 text-align:center;
-padding:40px;
-font-size:20px;
+font-size:22px;
 }
 
 .modal{
@@ -75,7 +106,7 @@ background:rgba(0,0,0,.95);
 justify-content:center;
 align-items:center;
 overflow:hidden;
-z-index:99999;
+z-index:9999;
 }
 
 .viewer{
@@ -91,6 +122,7 @@ overflow:hidden;
 max-width:none;
 max-height:none;
 cursor:grab;
+user-select:none;
 transform-origin:center center;
 }
 
@@ -101,48 +133,50 @@ left:15px;
 display:flex;
 gap:8px;
 flex-wrap:wrap;
-z-index:100000;
+z-index:10000;
 }
 
 .toolbar button,
-.download{
+.downloadBtn{
 background:#222;
 border:1px solid #666;
 color:white;
 padding:10px 14px;
-border-radius:6px;
 cursor:pointer;
+border-radius:8px;
 text-decoration:none;
 }
 
 .toolbar button:hover,
-.download:hover{
+.downloadBtn:hover{
 background:#444;
 }
 
 .close{
 position:absolute;
-right:20px;
 top:10px;
-font-size:40px;
+right:20px;
+font-size:45px;
 cursor:pointer;
-z-index:100001;
+z-index:10001;
 }
 
-.filename{
+.bottomInfo{
 position:absolute;
-bottom:20px;
-left:20px;
+bottom:15px;
+left:15px;
 background:rgba(0,0,0,.6);
 padding:10px;
 border-radius:8px;
-z-index:100001;
+max-width:90%;
+word-break:break-word;
 }
 
 #zoomLevel{
 display:flex;
 align-items:center;
-padding:0 10px;
+padding-left:10px;
+padding-right:10px;
 }
 
 </style>
@@ -151,20 +185,20 @@ padding:0 10px;
 
 <header>
 
-<h1>Galeria Zdjęć</h1>
+<h1>Galeria zdjęć</h1>
 
 <input
 id="search"
 type="text"
-placeholder="Szukaj zdjęcia...">
+placeholder="Szukaj zdjęcia lub folderu">
 
 </header>
 
-<div id="loading" class="loading">
+<div class="loading" id="loading">
 Ładowanie zdjęć...
 </div>
 
-<div class="gallery" id="gallery"></div>
+<div id="gallery"></div>
 
 <div class="modal" id="modal">
 
@@ -186,7 +220,7 @@ placeholder="Szukaj zdjęcia...">
 
 <a
 id="downloadBtn"
-class="download"
+class="downloadBtn"
 download>
 Pobierz
 </a>
@@ -199,7 +233,7 @@ Pobierz
 
 </div>
 
-<div id="fileName" class="filename"></div>
+<div id="imageInfo" class="bottomInfo"></div>
 
 </div>
 
@@ -220,26 +254,14 @@ const SUPPORTED = [
 ".avif"
 ];
 
+const folders = {};
+const images = [];
+
 const gallery =
 document.getElementById("gallery");
 
 const loading =
 document.getElementById("loading");
-
-const modal =
-document.getElementById("modal");
-
-const fullImage =
-document.getElementById("fullImage");
-
-const fileName =
-document.getElementById("fileName");
-
-const downloadBtn =
-document.getElementById("downloadBtn");
-
-let images = [];
-let currentIndex = 0;
 
 async function scanFolder(path){
 
@@ -256,12 +278,12 @@ const items = await response.json();
 
 for(const item of items){
 
-if(item.type === "dir"){
+if(item.type==="dir"){
 
 await scanFolder(item.path);
 
 }
-else if(item.type === "file"){
+else if(item.type==="file"){
 
 const lower =
 item.name.toLowerCase();
@@ -270,78 +292,165 @@ const isImage =
 SUPPORTED.some(ext =>
 lower.endsWith(ext));
 
-if(isImage){
+if(!isImage) continue;
+
+const folder =
+item.path.substring(
+0,
+item.path.lastIndexOf("/")
+);
+
+if(!folders[folder]){
+
+folders[folder]=[];
+
+}
+
+folders[folder].push(item);
 
 images.push(item);
 
-addThumbnail(item);
+}
+
+}
+
+}catch(e){
+
+console.error(e);
 
 }
 
 }
 
-}
+function renderGallery(){
 
-}
-catch(error){
+gallery.innerHTML="";
 
-console.error(error);
+const keys =
+Object.keys(folders)
+.sort((a,b)=>
+a.localeCompare(b));
 
-}
+keys.forEach(folder=>{
 
-}
+folders[folder]
+.sort((a,b)=>
+a.name.localeCompare(b.name));
 
-function addThumbnail(item){
+const section =
+document.createElement("div");
 
-const img =
-document.createElement("img");
+section.className =
+"folderSection";
 
-img.src =
+const title =
+folder.replace("images/","");
+
+section.innerHTML=
+`
+<div class="folderTitle">
+📁 ${title}
+<span class="folderCount">
+(${folders[folder].length})
+</span>
+</div>
+<div class="folderGrid"></div>
+`;
+
+const grid =
+section.querySelector(".folderGrid");
+
+folders[folder]
+.forEach(item=>{
+
+const card =
+document.createElement("div");
+
+card.className=
+"photoCard";
+
+const src =
 `https://raw.githubusercontent.com/${USER}/${REPO}/${BRANCH}/${item.path}`;
 
-img.dataset.name =
-item.name.toLowerCase();
+card.innerHTML=
+`
+<img src="${src}" loading="lazy">
+<div class="fileName">
+${item.name}
+</div>
+`;
 
-img.onclick = () => {
+card.querySelector("img")
+.onclick=()=>{
 
-currentIndex =
-images.findIndex(i =>
-i.path === item.path);
+const idx =
+images.findIndex(
+img =>
+img.path===item.path
+);
 
-openViewer(currentIndex);
+openImage(idx);
 
 };
 
-gallery.appendChild(img);
+grid.appendChild(card);
+
+});
+
+gallery.appendChild(section);
+
+});
 
 }
 
-function openViewer(index){
+scanFolder("images")
+.then(()=>{
 
-const item =
+loading.style.display="none";
+
+renderGallery();
+
+});
+
+const modal =
+document.getElementById("modal");
+
+const fullImage =
+document.getElementById("fullImage");
+
+const imageInfo =
+document.getElementById("imageInfo");
+
+const downloadBtn =
+document.getElementById("downloadBtn");
+
+let currentIndex=0;
+
+function openImage(index){
+
+currentIndex=index;
+
+const img=
 images[index];
 
-currentIndex = index;
+const src=
+`https://raw.githubusercontent.com/${USER}/${REPO}/${BRANCH}/${img.path}`;
 
-const imageUrl =
-`https://raw.githubusercontent.com/${USER}/${REPO}/${BRANCH}/${item.path}`;
+fullImage.src=src;
+
+downloadBtn.href=src;
+downloadBtn.download=img.name;
+
+imageInfo.textContent=
+img.path;
 
 modal.style.display="flex";
-
-fullImage.src=imageUrl;
-
-downloadBtn.href=imageUrl;
-downloadBtn.download=item.name;
-
-fileName.textContent=item.path;
 
 resetZoom();
 
 }
 
 function nextImage(){
-
-if(images.length===0) return;
 
 currentIndex++;
 
@@ -351,13 +460,11 @@ currentIndex=0;
 
 }
 
-openViewer(currentIndex);
+openImage(currentIndex);
 
 }
 
 function prevImage(){
-
-if(images.length===0) return;
 
 currentIndex--;
 
@@ -368,22 +475,9 @@ images.length-1;
 
 }
 
-openViewer(currentIndex);
+openImage(currentIndex);
 
 }
-
-scanFolder("images").then(()=>{
-
-loading.style.display="none";
-
-if(images.length===0){
-
-gallery.innerHTML =
-"<h2>Brak zdjęć</h2>";
-
-}
-
-});
 
 document.querySelector(".close")
 .onclick=()=>{
@@ -392,7 +486,7 @@ modal.style.display="none";
 
 };
 
-modal.onclick=(e)=>{
+modal.onclick=e=>{
 
 if(e.target===modal){
 
@@ -408,21 +502,20 @@ let posY=0;
 
 function updateTransform(){
 
-fullImage.style.transform =
+fullImage.style.transform=
 `translate(${posX}px,${posY}px) scale(${zoom})`;
 
 document.getElementById("zoomLevel")
-.textContent =
+.textContent=
 Math.round(zoom*100)+"%";
 
 }
 
 function zoomIn(){
 
-zoom += 0.25;
+zoom+=0.25;
 
-if(zoom > 10)
-zoom = 10;
+if(zoom>10) zoom=10;
 
 updateTransform();
 
@@ -430,10 +523,9 @@ updateTransform();
 
 function zoomOut(){
 
-zoom -= 0.25;
+zoom-=0.25;
 
-if(zoom < 0.2)
-zoom = 0.2;
+if(zoom<0.2) zoom=0.2;
 
 updateTransform();
 
@@ -441,11 +533,9 @@ updateTransform();
 
 function resetZoom(){
 
-zoom = 1;
-
-posX = 0;
-
-posY = 0;
+zoom=1;
+posX=0;
+posY=0;
 
 updateTransform();
 
@@ -453,25 +543,22 @@ updateTransform();
 
 fullImage.addEventListener(
 "wheel",
-function(e){
+e=>{
 
 e.preventDefault();
 
-if(e.deltaY < 0){
+if(e.deltaY<0){
 
-zoom += 0.1;
+zoom+=0.1;
 
 }else{
 
-zoom -= 0.1;
+zoom-=0.1;
 
 }
 
-if(zoom < 0.2)
-zoom = 0.2;
-
-if(zoom > 10)
-zoom = 10;
+if(zoom<0.2) zoom=0.2;
+if(zoom>10) zoom=10;
 
 updateTransform();
 
@@ -529,26 +616,37 @@ document
 "input",
 function(){
 
-const value =
+const value=
 this.value.toLowerCase();
 
 document
-.querySelectorAll(".gallery img")
-.forEach(img=>{
+.querySelectorAll(".folderSection")
+.forEach(section=>{
 
-if(
-img.dataset.name
-.includes(value)
-){
+let found=false;
 
-img.style.display="block";
+section
+.querySelectorAll(".photoCard")
+.forEach(card=>{
+
+const text=
+card.textContent.toLowerCase();
+
+if(text.includes(value)){
+
+card.style.display="block";
+found=true;
+
+}else{
+
+card.style.display="none";
 
 }
-else{
 
-img.style.display="none";
+});
 
-}
+section.style.display=
+found ? "block" : "none";
 
 });
 
@@ -559,7 +657,8 @@ document.addEventListener(
 "keydown",
 e=>{
 
-if(modal.style.display==="flex"){
+if(modal.style.display!=="flex")
+return;
 
 if(e.key==="ArrowRight")
 nextImage();
@@ -569,8 +668,6 @@ prevImage();
 
 if(e.key==="Escape")
 modal.style.display="none";
-
-}
 
 }
 );
