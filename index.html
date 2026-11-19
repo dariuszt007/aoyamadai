@@ -6,6 +6,11 @@
 <title>Galeria</title>
 
 <style>
+
+*{
+    box-sizing:border-box;
+}
+
 body{
     margin:0;
     padding:20px;
@@ -28,13 +33,20 @@ h1{
     width:100%;
     height:250px;
     object-fit:cover;
-    cursor:pointer;
     border-radius:10px;
+    cursor:pointer;
     transition:.3s;
+    user-select:none;
 }
 
 .gallery img:hover{
     transform:scale(1.03);
+}
+
+.loading{
+    text-align:center;
+    padding:30px;
+    font-size:20px;
 }
 
 .modal{
@@ -44,125 +56,325 @@ h1{
     background:rgba(0,0,0,.95);
     justify-content:center;
     align-items:center;
-    z-index:9999;
+    overflow:hidden;
+    z-index:99999;
 }
 
-.modal img{
-    max-width:95%;
-    max-height:95%;
+.viewer{
+    width:100%;
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+}
+
+#fullImage{
+    max-width:none;
+    max-height:none;
+    cursor:grab;
+    transform-origin:center center;
+}
+
+.toolbar{
+    position:absolute;
+    top:15px;
+    left:15px;
+    z-index:100000;
+    display:flex;
+    gap:8px;
+    align-items:center;
+}
+
+.toolbar button{
+    background:#222;
+    border:1px solid #666;
+    color:white;
+    padding:10px 15px;
+    cursor:pointer;
+    border-radius:6px;
+    font-size:16px;
+}
+
+.toolbar button:hover{
+    background:#444;
+}
+
+#zoomLevel{
+    font-size:18px;
+    min-width:80px;
 }
 
 .close{
     position:absolute;
-    top:20px;
-    right:30px;
+    top:10px;
+    right:25px;
     font-size:40px;
     color:white;
     cursor:pointer;
+    z-index:100001;
 }
 
-.loading{
+.error{
     text-align:center;
-    padding:40px;
+    color:red;
+    padding:30px;
 }
+
 </style>
 </head>
 <body>
 
-<h1>Galeria Zdjęć</h1>
+<h1>Galeria</h1>
 
-<div class="loading" id="loading">
+<div id="loading" class="loading">
 Ładowanie zdjęć...
 </div>
 
-<div class="gallery" id="gallery"></div>
+<div id="gallery" class="gallery"></div>
 
-<div class="modal" id="modal">
+<div id="modal" class="modal">
+
     <span class="close">&times;</span>
-    <img id="fullImage">
+
+    <div class="toolbar">
+        <button onclick="zoomOut()">−</button>
+        <button onclick="resetZoom()">100%</button>
+        <button onclick="zoomIn()">+</button>
+        <span id="zoomLevel">100%</span>
+    </div>
+
+    <div class="viewer">
+        <img id="fullImage">
+    </div>
+
 </div>
 
 <script>
 
-const USER = "TWOJ_LOGIN";
-const REPO = "TWOJE_REPO";
+const USER = "dariuszt007";
+const REPO = "aoyamadai";
 const BRANCH = "main";
 
-const api =
+const API =
 `https://api.github.com/repos/${USER}/${REPO}/contents/images`;
 
 const gallery = document.getElementById("gallery");
 const loading = document.getElementById("loading");
 
-fetch(api)
-.then(res => res.json())
+const supported = [
+".png",
+".jpg",
+".jpeg",
+".gif",
+".webp",
+".bmp",
+".svg",
+".avif"
+];
+
+fetch(API)
+.then(res => {
+
+    if(!res.ok){
+        throw new Error("API ERROR");
+    }
+
+    return res.json();
+})
 .then(files => {
 
-    loading.style.display = "none";
+    loading.style.display="none";
 
-    const imageExtensions = [
-        ".png",
-        ".jpg",
-        ".jpeg",
-        ".gif",
-        ".webp",
-        ".svg",
-        ".bmp",
-        ".avif"
-    ];
+    let count = 0;
 
-    files.forEach(file => {
+    files.forEach(file=>{
 
-        const lower = file.name.toLowerCase();
+        const lower =
+        file.name.toLowerCase();
 
-        const isImage = imageExtensions.some(ext =>
-            lower.endsWith(ext)
-        );
+        const isImage =
+        supported.some(ext =>
+        lower.endsWith(ext));
 
         if(!isImage) return;
 
-        const img = document.createElement("img");
+        count++;
+
+        const img =
+        document.createElement("img");
 
         img.src =
         `https://raw.githubusercontent.com/${USER}/${REPO}/${BRANCH}/images/${file.name}`;
 
-        img.alt = file.name;
+        img.loading = "lazy";
 
-        img.addEventListener("click", () => {
+        img.onclick = ()=>{
 
-            document.getElementById("modal").style.display = "flex";
-            document.getElementById("fullImage").src = img.src;
+            document
+            .getElementById("modal")
+            .style.display = "flex";
 
-        });
+            fullImage.src = img.src;
+
+            resetZoom();
+        };
 
         gallery.appendChild(img);
 
     });
 
+    if(count===0){
+
+        gallery.innerHTML=
+        "<h3>Brak zdjęć w folderze images</h3>";
+
+    }
+
 })
-.catch(error => {
+.catch(err=>{
 
-    loading.innerHTML =
-    "Błąd podczas pobierania zdjęć.";
+    console.error(err);
 
-    console.error(error);
+    loading.className="error";
+
+    loading.innerHTML=
+    "Nie można odczytać folderu images.";
 
 });
+
+const modal =
+document.getElementById("modal");
+
+const fullImage =
+document.getElementById("fullImage");
 
 document.querySelector(".close")
-.addEventListener("click", () => {
+.onclick = () => {
 
-    document.getElementById("modal").style.display = "none";
+    modal.style.display="none";
+
+};
+
+modal.addEventListener("click", function(e){
+
+    if(e.target === modal){
+
+        modal.style.display="none";
+
+    }
 
 });
 
-document.getElementById("modal")
-.addEventListener("click", function(e) {
+let zoom = 1;
+let posX = 0;
+let posY = 0;
 
-    if(e.target === this)
-        this.style.display = "none";
+function updateTransform(){
+
+    fullImage.style.transform =
+    `translate(${posX}px,${posY}px) scale(${zoom})`;
+
+    document.getElementById("zoomLevel")
+    .textContent =
+    Math.round(zoom*100)+"%";
+}
+
+function zoomIn(){
+
+    zoom += 0.25;
+
+    if(zoom > 10)
+        zoom = 10;
+
+    updateTransform();
+}
+
+function zoomOut(){
+
+    zoom -= 0.25;
+
+    if(zoom < 0.25)
+        zoom = 0.25;
+
+    updateTransform();
+}
+
+function resetZoom(){
+
+    zoom = 1;
+    posX = 0;
+    posY = 0;
+
+    updateTransform();
+}
+
+fullImage.addEventListener("wheel", function(e){
+
+    e.preventDefault();
+
+    if(e.deltaY < 0){
+
+        zoom += 0.1;
+
+    }else{
+
+        zoom -= 0.1;
+
+    }
+
+    if(zoom < 0.25)
+        zoom = 0.25;
+
+    if(zoom > 10)
+        zoom = 10;
+
+    updateTransform();
 
 });
+
+let dragging = false;
+let startX = 0;
+let startY = 0;
+
+fullImage.addEventListener("mousedown", e=>{
+
+    dragging = true;
+
+    startX = e.clientX - posX;
+    startY = e.clientY - posY;
+
+    fullImage.style.cursor="grabbing";
+
+});
+
+document.addEventListener("mousemove", e=>{
+
+    if(!dragging) return;
+
+    posX = e.clientX - startX;
+    posY = e.clientY - startY;
+
+    updateTransform();
+
+});
+
+document.addEventListener("mouseup", ()=>{
+
+    dragging = false;
+
+    fullImage.style.cursor="grab";
+
+});
+
+document.addEventListener("contextmenu",
+e=>e.preventDefault());
+
+document.addEventListener("dragstart",
+e=>e.preventDefault());
+
+document.addEventListener("selectstart",
+e=>e.preventDefault());
 
 </script>
 
